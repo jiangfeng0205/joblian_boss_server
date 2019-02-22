@@ -481,6 +481,10 @@ socketio.getSocketio = function(server){
                                     if (cityTableResult) {
                                         redisDb.zinterstore('jobCityHangyeTable:jobid'+data.companyJobId, 2, newJobClassTable, newCityClassTable, function(jobCityHangyeTableErr, jobCityHangyeTableResult){
                                             console.log('jobCityHangyeTableResult--', jobCityHangyeTableResult);
+                                            // 这里写推送职位逻辑
+                                            if (jobCityHangyeTableResult) {
+
+                                            }
                                         })
                                     }
                                 })
