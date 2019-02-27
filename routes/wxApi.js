@@ -217,6 +217,7 @@ function rawString(args) {
 };
 
 /**
+ * 微信js-sdk
  * 生成、缓存access_token、ticket
  * 获取signature
  * 返回wxConfig
@@ -369,5 +370,161 @@ router.post('/getWxConfig', function(req, res, next) {
     });
 
 });
+
+// 微信网页授权
+router.get('/wxOAuthUserinfo', function(req, res, next) {
+    // 1、用户同意授权，获取code
+    var redirect_uri = 'http://ceshi.joblian.cn/wxApi/getWxUserOpenId';
+    var redirect_uri = encodeURIComponent(redirect_uri);
+    var appid        = configJson.appID;
+    // var appid        = 'wxc3718b06f767373f';
+    var jobId        = 666;
+    var url = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid='+appid+'&redirect_uri='+redirect_uri+'&response_type=code&scope=snsapi_userinfo&state='+jobId+'#wechat_redirect'
+
+    res.redirect(url);
+});
+
+// 微信静默方式网页授权
+router.get('/wxOAuthBase', function(req, res, next) {
+    // 1、用户同意授权，获取code
+    var redirect_uri = 'http://ceshi.joblian.cn/wxApi/getWxBaseOpenId';
+    var redirect_uri = encodeURIComponent(redirect_uri);
+    var appid        = configJson.appID;
+    // var appid        = 'wxc3718b06f767373f';
+    var jobId        = 666;
+    var url = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid='+appid+'&redirect_uri='+redirect_uri+'&response_type=code&scope=snsapi_base&state='+jobId+'#wechat_redirect'
+
+    res.redirect(url);
+});
+
+router.post('/getWxUserOpenId', function(req, res, next) {
+    // 2、通过code换取网页授权access_token
+    var postData  = req.body;
+    var code      = postData.code;
+    var jobId     = postData.state;
+    var appid     = configJson.appID;
+    var appsecret = configJson.appScrect;
+
+    var accessTokenOptions = {
+        method: 'GET',
+        url: 'https://api.weixin.qq.com/sns/oauth2/access_token?appid='+appid+'&secret='+appsecret+'&code='+code+'&grant_type=authorization_code'
+    };
+
+    request(accessTokenOptions, function (err, result, body) {
+        if (result) {
+            var data = JSON.parse(body);
+            var table = 'wxShareOpenidTable:jobId' + jobId;
+            var score = parseInt(new Date().getTime() / 1000);
+
+            var userInfoOptions = {
+                method : 'GET',
+                url    : 'https://api.weixin.qq.com/sns/userinfo?access_token='+data.access_token+'&openid='+data.openid+'&lang=zh_CN'
+            }
+
+            request(userInfoOptions, function(err, userResult, body) {
+                if (userResult) {
+                    var userInfo = JSON.parse(body);
+
+                    var value = {
+                        jobId     : jobId,
+                        openid    : userInfo.openid,
+                        city      : userInfo.city,
+                        province  : userInfo.province,
+                        country   : userInfo.country,
+                        headimgurl: userInfo.headimgurl,
+                        nickname  : userInfo.nickname,
+                        sex       : userInfo.sex,
+                        unionid   : userInfo.unionid,
+                        time      : score
+                    };
+
+                    saveOpenId(table, score, value);
+
+                    return res.status(200).json({code:200, message:'wx OAuth success', data:userInfo});
+                } else {
+                    return res.status(200).json({code:400, message:'wx OAuth error', data:'error'});
+                }
+            });
+
+
+        } else {
+            return res.status(200).json({code:400, message:'wx OAuth error', data:'error'});
+        }
+    });
+
+});
+
+router.post('/getWxBaseOpenId', function(req, res, next) {
+    var postData  = req.body;
+    var code      = postData.code;
+    var jobId     = postData.state;
+    var appid     = configJson.appID;
+    var appsecret = configJson.appScrect;
+
+    var accessTokenOptions = {
+        method: 'GET',
+        url: 'https://api.weixin.qq.com/sns/oauth2/access_token?appid='+appid+'&secret='+appsecret+'&code='+code+'&grant_type=authorization_code'
+    };
+
+    request(accessTokenOptions, function (err, result, body) {
+        if (result) {
+            var baseInfo = JSON.parse(body);
+
+            var table = 'wxShareOpenidTable:jobId' + jobId;
+            var score = parseInt(new Date().getTime() / 1000);
+
+
+            var userInfoOptions = {
+                method : 'GET',
+                url    : 'https://api.weixin.qq.com/sns/userinfo?access_token='+baseInfo.access_token+'&openid='+baseInfo.openid+'&lang=zh_CN'
+            }
+
+            request(userInfoOptions, function(err, userResult, body) {
+                if (userResult) {
+                    var userInfo = JSON.parse(body);
+
+                    var value = {
+                        jobId     : jobId,
+                        openid    : baseInfo.openid,
+                        city      : userInfo.city,
+                        province  : userInfo.province,
+                        country   : userInfo.country,
+                        headimgurl: userInfo.headimgurl,
+                        nickname  : userInfo.nickname,
+                        sex       : userInfo.sex,
+                        unionid   : userInfo.unionid,
+                        time      : score
+                    };
+
+                    saveOpenId(table, score, value);
+
+                    return res.status(200).json({code:200, message:'wx OAuth success', data:userInfo});
+                } else {
+                    return res.status(200).json({code:400, message:'wx OAuth error', data:'error'});
+                }
+            });
+
+            // return res.status(200).json({code:200, message:'wx OAuth success', data:baseInfo});
+        } else {
+            return res.status(200).json({code:400, message:'wx OAuth error', data:'error'});
+        }
+    });
+
+
+});
+
+function saveOpenId (table, score, value) {
+    redisDb.zadd(table, score, JSON.stringify(value), function(err,result){
+        if (err) {
+            console.log('save weixin openid error');
+        } else {
+            if (result){
+                console.log('save weixin openid success');
+            } else {
+                console.log('save weixin open_id error');
+            }
+        }
+    });
+}
 
 module.exports = router;

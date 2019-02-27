@@ -479,7 +479,7 @@ router.post('/getCompanyJobDetail', function(req, res){
 	});
 });
 
-// 保存职位消息未读数量
+// 微信分享职位记录
 router.post('/saveWeixinShareJob', function(req, res) {
 	var postData = req.body;
 	console.log('saveWeixinShareJob--',postData);
